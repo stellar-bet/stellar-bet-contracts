@@ -393,6 +393,23 @@ cargo test -p bet_token -- --nocapture
 
 ---
 
+## Roadmap to Mainnet
+
+StellarBet is currently deployed on Stellar Testnet. The path to mainnet has three gates:
+
+**1. Security audit**
+All four Soroban contracts (BettingPool, OddsOracle, HouseEscrow, BetToken) need a third-party audit before handling real funds. Key areas: re-entrancy in BettingPool, oracle quorum manipulation, LP share price manipulation.
+
+**2. Oracle decentralisation**
+The current quorum oracle uses a small set of trusted reporters. Mainnet requires a larger, diverse reporter set with economic incentives (stake-to-report) and on-chain dispute resolution.
+
+**3. Regulatory review**
+Sports betting is regulated in most jurisdictions. The platform needs legal review for each target market before enabling real-money play.
+
+Testnet is fully functional and intended for community exploration, developer onboarding, and Stellar Wave program participation. Mainnet launch timeline will be published once audit and legal reviews are complete.
+
+---
+
 ## Security
 
 This is **testnet software**. Do not deploy to mainnet or use with real funds until a full security audit is complete. See [SECURITY.md](./SECURITY.md) for responsible disclosure guidelines.
