@@ -166,12 +166,9 @@ impl OddsOracle {
                 .set(&pending_key(market_id), &pending);
 
             let pool: Address = env.storage().instance().get(&POOL_KEY).unwrap();
-            // Cross-contract call to settle
-            let pool_client = betting_pool::BettingPoolClient::new(&env, &pool);
-            // pool_client.settle_market(&market_id, &outcome);
-            // NOTE: Uncomment above and add betting_pool as dependency in Cargo.toml
-            // for full cross-contract integration. For now, emit the event and let
-            // the backend monitor it to call settle_market directly.
+            // Cross-contract call stubbed — backend monitors QUORUM event and calls
+            // BettingPool.settle_market directly. Wire up once dependency is added.
+            let _ = pool;
 
             env.events()
                 .publish((symbol_short!("QUORUM"),), (market_id, outcome, vote_count));

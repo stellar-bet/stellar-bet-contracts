@@ -131,7 +131,7 @@ impl BettingPool {
         let market = Market {
             id: market_id,
             description,
-            sport,
+            sport: sport.clone(),
             outcome_count,
             total_pool: 0,
             winning_outcome: -1,
@@ -144,7 +144,7 @@ impl BettingPool {
         env.storage().instance().set(&market_count_key(), &count);
 
         env.events()
-            .publish((symbol_short!("MKT_NEW"),), (market_id, sport));
+            .publish((symbol_short!("MKT_NEW"),), (market_id, sport.clone()));
 
         market_id
     }
@@ -192,7 +192,7 @@ impl BettingPool {
         // Uncomment once contract addresses are wired:
         // let token = soroban_sdk::token::StellarAssetClient::new(&env, &xlm_token_address);
         // token.transfer(&bettor, &escrow, &stake_xlm);
-        let escrow: Address = env.storage().instance().get(&ESCROW_KEY).unwrap();
+        let _escrow: Address = env.storage().instance().get(&ESCROW_KEY).unwrap();
 
         let mut bet_count: u64 = env.storage().instance().get(&BET_COUNT).unwrap();
         let bet_id = bet_count;
