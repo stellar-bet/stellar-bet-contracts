@@ -1,0 +1,4 @@
+target/
+bindings/
+*.wasm
+.DS_Store
