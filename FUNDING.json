@@ -2,7 +2,7 @@
   "name": "stellar-bet-contracts",
   "description": "Soroban smart contracts for the StellarBet prediction market platform. Betting pool lifecycle, oracle settlement, house escrow liquidity, and SEP-41 governance token.",
   "webpageUrl": {
-    "url": "https://github.com/YOUR_ORG/stellar-bet-contracts"
+    "url": "https://github.com/stellar-bet/stellar-bet-contracts"
   },
   "fundingLinks": [
     {
