@@ -26,7 +26,6 @@ Soroban smart contracts powering the StellarBet prediction market platform on St
 - [Events](#events)
 - [Project Structure](#project-structure)
 - [Testing](#testing)
-- [Contributing](#contributing)
 - [Security](#security)
 - [License](#license)
 
@@ -64,6 +63,7 @@ Off-chain oracle backend
  │
  ├── BettingPool.settle_market(market_id, winning_outcome)   [oracle-only]
  │        └── marks market closed, sets winning_outcome
+ │             ↑ called directly by OddsOracle via cross-contract invocation
  │
  └── BettingPool.claim_payout(bet_id)   [bettor]
           └── HouseEscrow.pay_winner(winner, gross_amount)
@@ -129,9 +129,8 @@ Multi-reporter quorum oracle. A market is settled only when `quorum` reporters s
 | `is_reporter(reporter)` | `bool` | Whether an address is a trusted reporter |
 | `get_quorum()` | `u32` | Current quorum threshold |
 
-> **Note:** The cross-contract call to `BettingPool.settle_market` on quorum is stubbed. The backend monitors the `QUORUM` event and calls `settle_market` directly. See `contracts/odds_oracle/src/lib.rs` for the inline comment.
 
----
+
 
 ### HouseEscrow
 
@@ -393,10 +392,6 @@ cargo test -p bet_token -- --nocapture
 
 ---
 
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md). This repo participates in the [Stellar Wave Program](https://drips.network/wave) — open issues are tagged `stellar-wave` and carry point rewards.
-
 ---
 
 ## Security
@@ -404,8 +399,6 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). This repo participates in the [Stellar
 This is **testnet software**. Do not deploy to mainnet or use with real funds until a full security audit is complete. See [SECURITY.md](./SECURITY.md) for responsible disclosure guidelines.
 
 Key areas to review before mainnet:
-- XLM token transfer calls are stubbed in `place_bet`, `claim_payout`, `provide_liquidity`, `withdraw_liquidity`, and `pay_winner` — these must be wired to the native asset contract
-- The cross-contract `BettingPool.settle_market` call inside `OddsOracle` is commented out pending dependency wiring
 - The `eventToMarketMap` in the backend oracle scheduler is in-memory only and will not survive restarts
 
 ---

@@ -3,6 +3,8 @@
 //! Authorized oracle that receives market results from trusted off-chain
 //! data providers and forwards settlement instructions to the BettingPool.
 //! Uses a multi-sig quorum model: N-of-M reporter threshold before settlement.
+//! When quorum is reached, BettingPool.settle_market is called via a direct
+//! cross-contract invocation rather than relying on the backend to poll.
 
 #![no_std]
 
@@ -51,6 +53,18 @@ fn report_key(market_id: u64, reporter: &Address) -> (Symbol, u64, Address) {
     (symbol_short!("RPT"), market_id, reporter.clone())
 }
 
+// ─── BettingPool client (cross-contract call for settle_market) ──────────────
+
+mod betting_pool {
+    use soroban_sdk::{contractclient, Env};
+
+    #[allow(dead_code)]
+    #[contractclient(name = "BettingPoolClient")]
+    pub trait BettingPool {
+        fn settle_market(env: Env, market_id: u64, winning_outcome: u32);
+    }
+}
+
 // ─── Contract ────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -95,7 +109,8 @@ impl OddsOracle {
     }
 
     /// A trusted reporter submits a market result.
-    /// Once quorum is reached, the BettingPool is called to settle the market.
+    /// Once quorum is reached, BettingPool.settle_market is called directly
+    /// via cross-contract invocation and the QUORUM event is emitted.
     pub fn report_result(
         env: Env,
         reporter: Address,
@@ -143,32 +158,24 @@ impl OddsOracle {
         pending.outcome_votes.set(outcome, current + 1);
         pending.reporters.push_back(reporter.clone());
 
-        let report = OracleReport {
-            market_id,
-            reported_outcome: outcome,
-            reporter: reporter.clone(),
-            ledger: env.ledger().sequence(),
-            data_source,
-            external_event_id,
-        };
-
         env.events()
-            .publish((symbol_short!("REPORTED"),), (market_id, outcome, reporter));
+            .publish((symbol_short!("REPORTED"),), (market_id, outcome, reporter.clone()));
 
         let quorum: u32 = env.storage().instance().get(&QUORUM_KEY).unwrap();
         let vote_count = pending.outcome_votes.get(outcome).unwrap_or(0);
 
         if vote_count >= quorum {
-            // Quorum reached — settle the market via BettingPool
+            // Quorum reached — mark settled and persist before the cross-contract call
+            // so any re-entrant report_result will hit the `is_settled` guard.
             pending.is_settled = true;
             env.storage()
                 .persistent()
                 .set(&pending_key(market_id), &pending);
 
+            // Call BettingPool.settle_market on-chain
             let pool: Address = env.storage().instance().get(&POOL_KEY).unwrap();
-            // Cross-contract call stubbed — backend monitors QUORUM event and calls
-            // BettingPool.settle_market directly. Wire up once dependency is added.
-            let _ = pool;
+            let pool_client = betting_pool::BettingPoolClient::new(&env, &pool);
+            pool_client.settle_market(&market_id, &outcome);
 
             env.events()
                 .publish((symbol_short!("QUORUM"),), (market_id, outcome, vote_count));
@@ -203,7 +210,43 @@ impl OddsOracle {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Env};
+    use soroban_sdk::{
+        testutils::Address as _,
+        token::StellarAssetClient as TokenAdmin,
+        Env,
+    };
+
+    // ─── Minimal BettingPool registration for cross-contract test ────────
+
+    mod mock_pool {
+        use soroban_sdk::{contract, contractimpl, symbol_short, Env};
+
+        /// Minimal BettingPool stub — records which markets have been settled
+        /// so the quorum test can verify the cross-contract call was made.
+        #[contract]
+        pub struct MockPool;
+
+        const SETTLED_KEY: soroban_sdk::Symbol = symbol_short!("SETTLED");
+
+        #[contractimpl]
+        impl MockPool {
+            pub fn settle_market(env: Env, market_id: u64, winning_outcome: u32) {
+                // Store the settled outcome so tests can assert it
+                env.storage()
+                    .persistent()
+                    .set(&(symbol_short!("MKT"), market_id), &winning_outcome);
+                env.events()
+                    .publish((SETTLED_KEY,), (market_id, winning_outcome));
+            }
+
+            pub fn get_settled_outcome(env: Env, market_id: u64) -> u32 {
+                env.storage()
+                    .persistent()
+                    .get(&(symbol_short!("MKT"), market_id))
+                    .expect("market not settled")
+            }
+        }
+    }
 
     #[test]
     fn test_initialize_and_reporters() {
@@ -228,18 +271,23 @@ mod test {
     }
 
     #[test]
-    fn test_report_result_quorum() {
+    fn test_report_result_quorum_settles_pool() {
         let env = Env::default();
-        let contract_id = env.register_contract(None, OddsOracle);
-        let client = OddsOracleClient::new(&env, &contract_id);
+        env.mock_all_auths();
+
+        // Deploy the mock BettingPool
+        let pool_id = env.register_contract(None, mock_pool::MockPool);
+        let pool_client = mock_pool::MockPoolClient::new(&env, &pool_id);
+
+        // Deploy OddsOracle pointing at the mock pool
+        let oracle_id = env.register_contract(None, OddsOracle);
+        let client = OddsOracleClient::new(&env, &oracle_id);
 
         let admin = Address::generate(&env);
-        let pool = Address::generate(&env);
         let r1 = Address::generate(&env);
         let r2 = Address::generate(&env);
 
-        env.mock_all_auths();
-        client.initialize(&admin, &pool, &2u32);
+        client.initialize(&admin, &pool_id, &2u32);
         client.add_reporter(&r1);
         client.add_reporter(&r2);
 
@@ -251,9 +299,13 @@ mod test {
         let pending = client.get_pending(&0u64);
         assert!(!pending.is_settled);
 
-        // Second report — quorum reached
+        // Second report — quorum reached, pool.settle_market must be called
         client.report_result(&r2, &0u64, &1u32, &source, &ext_id);
         let pending = client.get_pending(&0u64);
         assert!(pending.is_settled);
+
+        // Verify the cross-contract call actually reached the mock pool
+        let settled_outcome = pool_client.get_settled_outcome(&0u64);
+        assert_eq!(settled_outcome, 1u32);
     }
 }
