@@ -2,7 +2,6 @@
 
 Soroban smart contracts powering the StellarBet prediction market platform on Stellar.
 
-[![Stellar Wave Program](https://img.shields.io/badge/Stellar%20Wave-Active-blue?logo=stellar)](https://drips.network/wave)
 [![Built on Soroban](https://img.shields.io/badge/Built%20on-Soroban-blueviolet)](https://stellar.org/soroban)
 [![Rust](https://img.shields.io/badge/Rust-soroban--sdk%2021.0.0-orange?logo=rust)](https://docs.rs/soroban-sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
